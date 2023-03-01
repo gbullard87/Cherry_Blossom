@@ -100,6 +100,14 @@ output = data.frame(City = predictdata.df$Location, Max_Bloom_Date = predictdata
 output
 ```
 
+```{r}
+output2 = data.frame(year = c(2023:2032), kyoto = output$Max_Bloom_Doy[output$City=="Kyoto"], liestal = output$Max_Bloom_Doy[output$City=="Liestal"], washingtondc = output$Max_Bloom_Doy[output$City=="Washington"], vancouver = 
+output$Max_Bloom_Doy[output$City=="Vancouver"])
+output2 = rbind(c("year", "kyoto", "liestal","vancouver", "washington"),output2)
+output2
+write.csv(output2, "cherries_output.csv")
+
+```
 
 
 
