@@ -1,0 +1,109 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+library(tidyverse)
+library(lme4)
+```
+
+
+```{r}
+#upload data and create variable for the city/country
+japan = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/japan.csv")
+japan$Location = "Japan"
+kyoto = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/kyoto.csv")
+kyoto$Location = "Kyoto"
+liestal = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/liestal.csv")
+liestal$Location = "Liestal"
+meteoswiss = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/meteoswiss.csv")
+meteoswiss$Location = "Switzerland"
+korea = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/south_korea.csv")
+korea$Location = "Korea"
+vanc = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/vancouver.csv")
+vanc$Location = "Vancouver"
+wash = read.csv("https://raw.githubusercontent.com/GMU-CherryBlossomCompetition/peak-bloom-prediction/main/data/washingtondc.csv")
+wash$Location = "Washington"
+```
+
+```{r}
+#combine data
+all_data = rbind(japan,kyoto,liestal,meteoswiss,korea,vanc,wash)
+#remove all pre-industrial data
+all_data = all_data[all_data$year>=1879,]
+all_data$logyear = log(all_data$year)
+all_data$location = as.factor(all_data$location)
+```
+
+```{r}
+#no noticably nonlinear trends
+plot(bloom_doy~lat,data = all_data)
+plot(bloom_doy~alt,data = all_data)
+#no need to log according to summary, but we will because we know that climate change effects are accelerating
+summary(lm(bloom_doy~year,data = all_data))
+```
+
+
+```{r}
+#mixed effects model 
+#Location is a fixed effect
+#lat, alt, year are random effects
+model1 = lmer(bloom_doy ~ scale(lat) + scale(alt) + (scale(log(year))|Location), data = all_data, REML =FALSE)
+summary(model1)
+```
+compile location data for predictions
+```{r}
+locations.df = data.frame(Location = c("Kyoto", "Liestal","Vancouver", "Washington"), 
+                          alt = c(mean(kyoto$alt), 327, mean(vanc$alt), mean(wash$alt)),
+                          lat = c(mean(kyoto$lat), 47.48, mean(vanc$lat), mean(wash$lat)))
+```
+make prediction dataframe
+```{r}
+predictdata.df = data.frame(Location=c(),alt=c(),lat=c(),year=c())
+```
+
+```{r}
+#add a month to latest known bloom date to allow for variation and climate change
+  big = max(all_data$bloom_doy)+30
+  #subtract 10 days from earliest day to account for variation
+  small = 1
+  #make a sequence of test years
+years = c(2023:2032)
+
+n=length(years)
+
+#make new dataframe with test city conditions and years
+for (place in c("Kyoto", "Liestal","Vancouver", "Washington")){
+  temp.alt = locations.df$alt[locations.df$Location==place]
+  temp.lat = locations.df$lat[locations.df$Location==place]
+  temp.df = data.frame(Location=rep(place,n),alt=rep(temp.alt,n),lat=rep(temp.lat,n),year=years)
+  if (place == "Liestal") {
+    temp.df$Location = "Switzerland"
+  }
+  predictdata.df = rbind(predictdata.df, temp.df)
+  }
+```
+
+```{r}
+#predict future peak bloom dates!
+#model1 was made from old (training) data, predictdata.df = new data
+predictdata.df$predictions = predict(model1, predictdata.df, type = "response") 
+predictdata.df$date_predictions =  predictdata.df$predictions %>% 
+                             round(0) %>% 
+                             as.Date(origin = as.Date(paste0(predictdata.df$year,"-01-01")))
+                             # Convert Julian day to date
+predictdata.df$Location[predictdata.df$Location=="Switzerland"] = "Liestal"
+output = data.frame(City = predictdata.df$Location, Max_Bloom_Date = predictdata.df$date_predictions, Max_Bloom_Doy = predictdata.df$predictions %>% round(0)) 
+output
+```
+
+
+
+
+
+
+
+
